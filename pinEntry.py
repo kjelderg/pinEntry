@@ -74,9 +74,9 @@ def generateHashes(s, pinPresses):
          for p in list(itertools.product(*pinPresses))
    ])
 
-def checkPass(s, hash, pinPresses):
+def checkPass(s, h, pinPresses):
    for p in list(itertools.product(*pinPresses)):
-      if hash == hashlib.sha256(''.join(str(v) for v in p).encode()+s).hexdigest():
+      if h == hashlib.sha256(''.join(str(v) for v in p).encode()+s).hexdigest():
          return True
    return False
 
@@ -89,8 +89,8 @@ second = promptUser(verifyKeypad(symbols))
 PIN = comparePinPresses(first, second)
 print "You selected ", PIN
 salt = uuid.uuid4().hex
-hash = hashlib.sha256(''.join(str(v) for v in PIN).encode()+salt).hexdigest()
-print "We should store ", ''.join([salt, ":", hash])
+passwordHash = hashlib.sha256(''.join(str(v) for v in PIN).encode()+salt).hexdigest()
+print "We should store ", ''.join([salt, ":", passwordHash])
 
 # 3. have the user make a password attempt
 pinPress = promptUser(randomKeypad(symbols)) # NOTE: this alters symbols
@@ -99,11 +99,17 @@ pinPress = promptUser(randomKeypad(symbols)) # NOTE: this alters symbols
 #     NOTE: this is n^l hashes for n symbol types and an l-length PIN
 start = datetime.now()
 hashes = generateHashes(salt, pinPress)
-print "PASSWORD MATCH: The keys to the kingdom: ", hash if hash in hashes else "PASSWORD MISMATCH: better luck next time."
+if passwordHash in hashes:
+   print "MATCH: The keys to the kingdom" 
+else:
+   print "MISMATCH: better luck next time."
 print "The hashes object is consuming ", sys.getsizeof(hashes), "b", " and took {} to build.".format(datetime.now() - start)
 
 # 4b. pass the password hash to the checking function.  This is a common model for a local password check.
 start = datetime.now()
-print "PASSWORD MATCH: The keys to the kingdom: ", hash if checkPass(salt, hash, pinPress) else "PASSWORD MISMATCH: better luck next time."
+if checkPass(salt, passwordHash, pinPress):
+   print "MATCH: The keys to the kingdom"
+else:
+   print "MISMATCH: better luck next time."
 print "The search took {} to execute.".format(datetime.now() - start)
 
