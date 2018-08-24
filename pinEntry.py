@@ -3,22 +3,20 @@ from collections import OrderedDict
 from datetime import datetime
 import hashlib, itertools, random, sys, uuid
 
-symbols = OrderedDict()
-symbols["numbers"] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
-symbols["colors"]  = ["red", "orange", "yellow", "green", "blue", "indigo", "violet", "black", "white", "grey"]
-symbols["uppers"]  = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"]
-symbols["lowers"]  = ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"]
-symbols["shapes"]  = ["circle", "oval", "triangle", "square", "pentagon", "plus", "trapezoid", "diamond", "trefoil", "semicircle"]
-symbols["symbols"] = ["!", "@", "#", "$", "%", "^", "&", "*", "(", ")"]
+symbols = OrderedDict([
+   ("numbers", [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]),
+   ("colors",  ["red", "orange", "yellow", "green", "blue", "indigo", "violet", "black", "white", "grey"]),
+   ("uppers",  ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"]),
+   ("lowers",  ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"]),
+   ("shapes",  ["circle", "oval", "triangle", "square", "pentagon", "plus", "trapezoid", "diamond", "trefoil", "semicircle"]),
+   ("symbols", ["!", "@", "#", "$", "%", "^", "&", "*", "(", ")"])
+])
 
 # create a keypad from the symbols dictionary
 def genKeypad(s):
    keypad = []
    for i in range(0, len(s[next(iter(s))])):
-      key = []
-      for k in s:
-         key.append(s[k][i])
-      keypad.append(key)
+      keypad.append([s[k][i] for k in s])
    return keypad
 
 # create a random keypad from the symbols dictionary
@@ -38,21 +36,16 @@ def verifyKeypad(s):
    i = 0
    for k in s:
       v[k] = s[k][i:] + s[k][:-i] if i else s[k]
-      i = i + 1
+      i += 1
 
    return genKeypad(v)
 
+# provide an interactive prompt for user PIN input.
+#  return: the list of pinPresses
 def promptUser(kp):
    for i,v in enumerate(kp):
-      print i, ": ", v
-   
-   pinPress = raw_input("Please enter the array indices of your PIN: ")
-
-   keys = []
-   for i in pinPress:
-      keys.append(kp[int(i)])
-
-   return keys
+      print i,": ",v
+   return [kp[int(i)] for i in raw_input("Please enter the array indices of your PIN: ")]
 
 # given two pin entries (a la verifyKeypad()), return the PIN
 #  XXX: this probably breaks if multiple pins are possible.
@@ -76,39 +69,41 @@ def comparePinPresses(a, b):
    return pin
 
 def generateHashes(s, pinPresses):
-   hashes = set()
+   return set([
+      hashlib.sha256(''.join(str(v) for v in p).encode()+s).hexdigest()
+         for p in list(itertools.product(*pinPresses))
+   ])
+
+def checkPass(s, hash, pinPresses):
    for p in list(itertools.product(*pinPresses)):
-      hashes.add(s + ":" + hashlib.sha256(''.join(str(v) for v in p).encode()).hexdigest())
-   return hashes
+      if hash == hashlib.sha256(''.join(str(v) for v in p).encode()+s).hexdigest():
+         return True
+   return False
 
 
 # 1. Create a new user pin
-keypad = randomKeypad(symbols) # NOTE: this alters symbols
-first = promptUser(keypad)
-print first
-
-keypad = verifyKeypad(symbols)
-second = promptUser(keypad)
-print second
+first = promptUser(randomKeypad(symbols))# NOTE: this alters symbols
+second = promptUser(verifyKeypad(symbols))
 
 # 2. generate the real password hash
 PIN = comparePinPresses(first, second)
 print "You selected ", PIN
 salt = uuid.uuid4().hex
-hash = salt + ":" + hashlib.sha256(''.join(str(v) for v in PIN).encode()).hexdigest()
-print "Your hash is ", hash
+hash = hashlib.sha256(''.join(str(v) for v in PIN).encode()+salt).hexdigest()
+print "We should store ", ''.join([salt, ":", hash])
 
 # 3. have the user make a password attempt
-keypad = randomKeypad(symbols) # NOTE: this alters symbols
-pinPress = promptUser(keypad)
-print pinPress
+pinPress = promptUser(randomKeypad(symbols)) # NOTE: this alters symbols
 
-# 4. generate a list of all possible password hashes
+# 4a. generate a list of all possible password hashes and then check that.  This is a common model for remote password checks.
 #     NOTE: this is n^l hashes for n symbol types and an l-length PIN
 start = datetime.now()
 hashes = generateHashes(salt, pinPress)
-print "The hashes object is consuming ", sys.getsizeof(hashes), "b"
-print " and took {} to build.".format(datetime.now() - start)
+print "PASSWORD MATCH: The keys to the kingdom: ", hash if hash in hashes else "PASSWORD MISMATCH: better luck next time."
+print "The hashes object is consuming ", sys.getsizeof(hashes), "b", " and took {} to build.".format(datetime.now() - start)
 
-# 5. report success
-print "The keys to the kingdom: ", hash if hash in hashes else "better luck next time."
+# 4b. pass the password hash to the checking function.  This is a common model for a local password check.
+start = datetime.now()
+print "PASSWORD MATCH: The keys to the kingdom: ", hash if checkPass(salt, hash, pinPress) else "PASSWORD MISMATCH: better luck next time."
+print "The search took {} to execute.".format(datetime.now() - start)
+
